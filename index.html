@@ -5,7 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Church Library Scanner</title>
-    <script src="qrcode.js"></script>
+    <!-- Quagga2 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -22,11 +23,30 @@
 
         /* Camera Container */
         #reader {
+            position: relative;
             width: 100%;
+            height: auto;
             margin-bottom: 20px;
             border-radius: 8px;
             overflow: hidden;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            background: #000;
+        }
+
+        /* Make video fill the container */
+        #reader video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* Overlay canvas for drawing boxes */
+        #reader canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
         }
 
         /* Buttons */
@@ -106,7 +126,7 @@
 
 <body>
 
-    <h1>📚 Book Scanner</h1>
+    <h1>📚 Book Scanner (Quagga)</h1>
 
     <div id="reader"></div>
 
@@ -126,14 +146,15 @@
     <script>
         let scannedISBNS = [];
         const audio = new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3'); // Beep sound
-
         let isScanning = true;
 
-        function onScanSuccess(decodedText, decodedResult) {
+        // --- Logic Functions ---
+
+        function onScanSuccess(code) {
             if (!isScanning) return;
 
             // Check if ISBN is already in the list to prevent double-scanning instantly
-            if (scannedISBNS.includes(decodedText)) {
+            if (scannedISBNS.includes(code)) {
                 return;
             }
 
@@ -141,13 +162,12 @@
             audio.play();
 
             // Add to array
-            scannedISBNS.push(decodedText);
+            scannedISBNS.push(code);
 
             // Update UI
             updateList();
 
-            // Pause scanner for 1 second to let user move to next book
-            // We use a boolean flag instead of .pause()/.resume() to avoid DOM errors on some devices
+            // Pause scanner logic for 1 second
             isScanning = false;
             setTimeout(() => { isScanning = true; }, 1000);
         }
@@ -185,6 +205,7 @@
             link.setAttribute("download", "my_church_books.csv");
             document.body.appendChild(link);
             link.click();
+            document.body.removeChild(link);
         }
 
         function clearList() {
@@ -194,33 +215,79 @@
             }
         }
 
-        // Initialize Scanner with optimzations for Books (EAN-13)
-        // 1. Use Native Barcode Detector (faster on Android/Chrome)
-        // 2. Restrict to EAN_13 only (saves CPU)
-        // 3. Wider scanning box for barcodes
-        let html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader",
-            {
-                fps: 15, // Higher stickiness
-                qrbox: { width: 280, height: 100 }, // Wider box for ISBNs
-                aspectRatio: 1.0,
-                formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13],
-                experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true
+        // --- Quagga Scanner Setup ---
+
+        Quagga.init({
+            inputStream: {
+                name: "Live",
+                type: "LiveStream",
+                target: document.querySelector('#reader'),
+                constraints: {
+                    width: { min: 640 },
+                    height: { min: 480 },
+                    facingMode: "environment", // Use back camera
+                    aspectRatio: { min: 1, max: 2 }
                 }
             },
-            /* verbose= */ false);
+            locator: {
+                patchSize: "medium",
+                halfSample: true
+            },
+            numOfWorkers: 2,
+            frequency: 10,
+            decoder: {
+                readers: ["ean_reader"] // standard for books
+            },
+            locate: true // Find barcode location in image
+        }, function (err) {
+            if (err) {
+                console.log(err);
+                document.querySelector('#reader').innerHTML = `<p style="color:red; text-align:center; padding:20px;">Error starting camera: ${err}</p>`;
+                return;
+            }
+            console.log("Initialization finished. Ready to start");
+            Quagga.start();
+        });
 
-        html5QrcodeScanner.render(onScanSuccess);
+        // Visual feedback: Draw boxes around detected barcodes
+        Quagga.onProcessed(function (result) {
+            var drawingCtx = Quagga.canvas.ctx.overlay,
+                drawingCanvas = Quagga.canvas.dom.overlay;
 
-        // Fix camera failing on refresh by stopping scanner when page closes
+            if (result) {
+                if (result.boxes) {
+                    drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
+                    result.boxes.filter(function (box) {
+                        return box !== result.box;
+                    }).forEach(function (box) {
+                        Quagga.ImageDebug.drawPath(box, { x: 0, y: 1 }, drawingCtx, { color: "green", lineWidth: 2 });
+                    });
+                }
+
+                if (result.box) {
+                    Quagga.ImageDebug.drawPath(result.box, { x: 0, y: 1 }, drawingCtx, { color: "#00F", lineWidth: 2 });
+                }
+
+                if (result.codeResult && result.codeResult.code) {
+                    Quagga.ImageDebug.drawPath(result.line, { x: 'x', y: 'y' }, drawingCtx, { color: 'red', lineWidth: 3 });
+                }
+            }
+        });
+
+        // Successful detection
+        Quagga.onDetected(function (result) {
+            var code = result.codeResult.code;
+            if (code) {
+                onScanSuccess(code);
+            }
+        });
+
+        // Cleanup when leaving page
         window.onbeforeunload = () => {
-            html5QrcodeScanner.clear().catch(error => {
-                console.error("Failed to clear scanner", error);
-            });
+            Quagga.stop();
         };
-    </script>
 
+    </script>
 </body>
 
 </html>
