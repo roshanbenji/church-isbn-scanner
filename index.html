@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Church Library Scanner</title>
+    <script src="qrcode.js"></script>
+        <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background-color: #f4f4f9; }
+        h1 { text-align: center; color: #333; }
+        
+        /* Camera Container */
+        #reader { width: 100%; margin-bottom: 20px; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        
+        /* Buttons */
+        .btn-group { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; }
+        button { padding: 12px 20px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; font-weight: bold; width: 100%; }
+        .btn-export { background-color: #28a745; color: white; }
+        .btn-clear { background-color: #dc3545; color: white; }
+        
+        /* Scanned List */
+        .scanned-list { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .scanned-list h3 { margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        ul { list-style: none; padding: 0; }
+        li { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        li:last-child { border-bottom: none; }
+        .isbn-text { font-family: monospace; font-size: 1.1em; color: #555; }
+        .count-badge { background: #007bff; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; }
+    </style>
+</head>
+<body>
+
+    <h1>📚 Book Scanner</h1>
+    
+    <div id="reader"></div>
+
+    <div class="scanned-list">
+        <h3>Scanned Books (<span id="count">0</span>)</h3>
+        <ul id="isbn-list">
+            </ul>
+    </div>
+
+    <br>
+
+    <div class="btn-group">
+        <button class="btn-export" onclick="exportToCSV()">📥 Download CSV</button>
+        <button class="btn-clear" onclick="clearList()">🗑️ Clear List</button>
+    </div>
+
+    <script>
+        let scannedISBNS = [];
+        const audio = new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3'); // Beep sound
+
+        function onScanSuccess(decodedText, decodedResult) {
+            // Check if ISBN is already in the list to prevent double-scanning instantly
+            if (scannedISBNS.includes(decodedText)) {
+                return; 
+            }
+
+            // Play beep
+            audio.play();
+
+            // Add to array
+            scannedISBNS.push(decodedText);
+            
+            // Update UI
+            updateList();
+            
+            // Optional: Pause scanner for 1 second to let user move to next book
+            html5QrcodeScanner.pause();
+            setTimeout(() => { html5QrcodeScanner.resume(); }, 1000);
+        }
+
+        function updateList() {
+            const listElement = document.getElementById("isbn-list");
+            const countElement = document.getElementById("count");
+            
+            listElement.innerHTML = ""; // Clear current display
+            
+            // Re-draw list in reverse order (newest top)
+            scannedISBNS.slice().reverse().forEach(isbn => {
+                let li = document.createElement("li");
+                li.innerHTML = `<span class="isbn-text">${isbn}</span>`;
+                listElement.appendChild(li);
+            });
+
+            countElement.innerText = scannedISBNS.length;
+        }
+
+        function exportToCSV() {
+            if (scannedISBNS.length === 0) {
+                alert("No books scanned yet!");
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,ISBN\n";
+            scannedISBNS.forEach(function(row) {
+                csvContent += row + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "my_church_books.csv");
+            document.body.appendChild(link);
+            link.click();
+        }
+
+        function clearList() {
+            if(confirm("Are you sure you want to clear the list?")) {
+                scannedISBNS = [];
+                updateList();
+            }
+        }
+
+        // Initialize Scanner
+        // format uses 'EAN_13' which is standard for Books
+        let html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader", 
+            { fps: 10, qrbox: {width: 250, height: 150} },
+            /* verbose= */ false);
+        
+        html5QrcodeScanner.render(onScanSuccess);
+    </script>
+
+</body>
+</html>
