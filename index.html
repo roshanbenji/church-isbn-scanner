@@ -161,7 +161,10 @@
 
     <script>
         let scannedISBNS = [];
-        const audio = new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3');
+        // Short beep sound (Base64) to avoid network issues
+        const beepSound = "data:audio/mp3;base64,SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAZGFzaABUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzbzZtcDQxAFRTU0UAAAAOAAADTGF2ZjU5LjI3LjEwMAAAAAAAAAAAAAAA//tQZAAAAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//tQZBQAABoA0gAAAAAQAAaQAAAAAEWCcA//7UGQZAAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZBoAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZBwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZCIAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZCwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZDQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZDoAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZEQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZEwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZFIAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZFoAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZGAAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZGwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZHQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZIAAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZIgAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZIwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZJQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZJ4AABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZKYAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZK4AABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZLQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZL4AABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZMQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZMwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZNIAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZNoAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZOAAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZOsAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZPQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZPoAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZQQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZQwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZRIAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZRoAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZSAAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZSwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZTQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZToAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZUQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZUwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZVIAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZVoAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZWAAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZWwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZXQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZYAAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZYgAABoA0gAAAAAQAAaQAAAAAAFAAAAA";
+        const audio = new Audio(beepSound);
+
         let isScanning = true;
         let pendingISBN = null;
         let pendingBookData = null;
@@ -184,7 +187,9 @@
 
             // Pause scanning while we process
             isScanning = false;
-            audio.play();
+
+            // Try to play audio, handling browser auto-play restrictions
+            audio.play().catch(e => console.log("Audio play failed (user interaction needed):", e));
 
             // 2. Fetch Book Info
             const bookInfo = await fetchBookDetails(cleanCode);
@@ -253,6 +258,14 @@
         function confirmScan(shouldAdd) {
             document.getElementById("confirm-modal").style.display = "none";
 
+            // "Unlock" audio on this interaction if it was blocked
+            if (audio.paused) {
+                audio.play().then(() => {
+                    audio.pause();
+                    audio.currentTime = 0;
+                }).catch(() => { });
+            }
+
             if (shouldAdd && pendingISBN) {
                 scannedISBNS.push({
                     isbn: pendingISBN,
@@ -275,7 +288,11 @@
 
             listElement.innerHTML = "";
 
-            scannedISBNS.slice().reverse().forEach(book => {
+            // Map original indices so we can delete the correct item even when reversed
+            const booksWithIndices = scannedISBNS.map((book, index) => ({ book, index }));
+
+            // Re-draw list in reverse order (newest top)
+            booksWithIndices.reverse().forEach(({ book, index }) => {
                 let li = document.createElement("li");
                 li.innerHTML = `
                     <div style="display:flex; flex-direction:column;">
@@ -283,11 +300,19 @@
                         <span style="font-size:0.85em; color:#666;">${book.author}</span>
                         <span class="isbn-text" style="font-size:0.8em;">${book.isbn}</span>
                     </div>
+                    <button onclick="deleteBook(${index})" style="background:none; border:none; cursor:pointer; font-size:1.2em; color:red; width:auto; padding:0 10px;">❌</button>
                 `;
                 listElement.appendChild(li);
             });
 
             countElement.innerText = scannedISBNS.length;
+        }
+
+        function deleteBook(index) {
+            if (confirm("Delete this book?")) {
+                scannedISBNS.splice(index, 1);
+                updateList();
+            }
         }
 
         function exportToCSV() {
@@ -330,7 +355,7 @@
                 constraints: {
                     width: { min: 640 },
                     height: { min: 480 },
-                    facingMode: "environment",
+                    facingMode: "environment", // Use back camera
                     aspectRatio: { min: 1, max: 2 }
                 }
             },
@@ -341,9 +366,9 @@
             numOfWorkers: 2,
             frequency: 10,
             decoder: {
-                readers: ["ean_reader"]
+                readers: ["ean_reader"] // standard for books
             },
-            locate: true
+            locate: true // Find barcode location in image
         }, function (err) {
             if (err) {
                 console.log(err);
@@ -354,7 +379,7 @@
             Quagga.start();
         });
 
-        // Visual feedback: Draw boxes
+        // Visual feedback: Draw boxes around detected barcodes
         Quagga.onProcessed(function (result) {
             var drawingCtx = Quagga.canvas.ctx.overlay,
                 drawingCanvas = Quagga.canvas.dom.overlay;
@@ -387,6 +412,7 @@
             }
         });
 
+        // Cleanup when leaving page
         window.onbeforeunload = () => {
             Quagga.stop();
         };
