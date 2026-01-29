@@ -180,10 +180,7 @@
                 return;
             }
 
-            // Check duplicate in current session
-            if (scannedISBNS.some(book => book.isbn === cleanCode)) {
-                return;
-            }
+            // (Duplicate check removed to allow multiple copies)
 
             // Pause scanning while we process
             isScanning = false;
