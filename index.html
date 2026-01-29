@@ -31,6 +31,7 @@
             overflow: hidden;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             background: #000;
+            min-height: 200px;
         }
 
         /* Make video fill the container */
@@ -136,6 +137,17 @@
         </ul>
     </div>
 
+    <!-- Start Scanner Overlay -->
+    <div id="start-overlay"
+        style="position:fixed; top:0; left:0; width:100%; height:100%; background:white; z-index:2000; display:flex; flex-direction:column; justify-content:center; align-items:center;">
+        <h1 style="margin-bottom:10px;">📚 Church Library Scanner</h1>
+        <p style="color:#666; margin-bottom:30px; text-align:center; max-width:80%;">Click start to enable the camera
+            and audio.</p>
+        <button onclick="startScanner()"
+            style="padding:15px 40px; font-size:1.2em; background:#007bff; color:white; border:none; border-radius:30px; margin-top:20px; box-shadow:0 4px 10px rgba(0,123,255,0.3); width:auto;">Start
+            Scanner ▶️</button>
+    </div>
+
     <!-- Confirmation Modal -->
     <div id="confirm-modal"
         style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center;">
@@ -161,13 +173,55 @@
 
     <script>
         let scannedISBNS = [];
-        // Short beep sound (Base64) to avoid network issues
-        const beepSound = "data:audio/mp3;base64,SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAZGFzaABUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzbzZtcDQxAFRTU0UAAAAOAAADTGF2ZjU5LjI3LjEwMAAAAAAAAAAAAAAA//tQZAAAAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//tQZBQAABoA0gAAAAAQAAaQAAAAAEWCcA//7UGQZAAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZBoAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZBwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZCIAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZCwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZDQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZDoAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZEQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZEwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZFIAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZFoAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZGAAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZGwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZHQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZIAAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZIgAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZIwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZJQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZJ4AABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZKYAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZK4AABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZLQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZL4AABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZMQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZMwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZNIAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZNoAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZOAAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZOsAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZPQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZPoAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZQQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZQwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZRIAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZRoAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZSAAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZSwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZTQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZToAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZUQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZUwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZVIAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZVoAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZWAAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZWwAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZXQAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZYAAABoA0gAAAAAQAAaQAAAAAAFAAAAA//tQZYgAABoA0gAAAAAQAAaQAAAAAAFAAAAA";
-        const audio = new Audio(beepSound);
-
-        let isScanning = true;
+        let isScanning = false;
         let pendingISBN = null;
         let pendingBookData = null;
+        let audioCtx = null;
+
+        // --- Start & Audio Logic ---
+
+        function startScanner() {
+            // 1. Initialize Audio Context (MUST be done on user gesture)
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+
+            // Play a silent note to force the audio engine to unlock
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            gainNode.gain.value = 0.001; // Nearly silent
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.start(0);
+            oscillator.stop(0.1);
+
+            // 2. Hide Overlay
+            document.getElementById("start-overlay").style.display = "none";
+
+            // 3. Start Quagga
+            initQuagga();
+            isScanning = true;
+        }
+
+        function playBeep() {
+            if (!audioCtx) return;
+
+            // Create a simple "beep" using the oscillator
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.type = 'square';
+            oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); // High pitch
+            oscillator.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.1); // Drop pitch
+
+            gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.1);
+        }
 
         // --- Logic Functions ---
 
@@ -179,17 +233,14 @@
 
             // Bookland check: Must start with 978 or 979
             if (!cleanCode.startsWith("978") && !cleanCode.startsWith("979")) {
-                // console.log("Ignored non-book barcode:", cleanCode);
                 return;
             }
-
-            // (Duplicate check removed to allow multiple copies)
 
             // Pause scanning while we process
             isScanning = false;
 
-            // Try to play audio, handling browser auto-play restrictions
-            audio.play().catch(e => console.log("Audio play failed (user interaction needed):", e));
+            // Play generated beep
+            playBeep();
 
             // 2. Fetch Book Info
             const bookInfo = await fetchBookDetails(cleanCode);
@@ -216,7 +267,7 @@
                 console.warn("Open Library failed, trying fallback...", e);
             }
 
-            // Fallback: Google Books (No key needed for basic public data)
+            // Fallback: Google Books
             try {
                 const gResponse = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
                 const gData = await gResponse.json();
@@ -258,14 +309,6 @@
         function confirmScan(shouldAdd) {
             document.getElementById("confirm-modal").style.display = "none";
 
-            // "Unlock" audio on this interaction if it was blocked
-            if (audio.paused) {
-                audio.play().then(() => {
-                    audio.pause();
-                    audio.currentTime = 0;
-                }).catch(() => { });
-            }
-
             if (shouldAdd && pendingISBN) {
                 scannedISBNS.push({
                     isbn: pendingISBN,
@@ -288,10 +331,10 @@
 
             listElement.innerHTML = "";
 
-            // Map original indices so we can delete the correct item even when reversed
+            // Map original indices (delete logic preserved)
             const booksWithIndices = scannedISBNS.map((book, index) => ({ book, index }));
 
-            // Re-draw list in reverse order (newest top)
+            // Re-draw list in reverse order
             booksWithIndices.reverse().forEach(({ book, index }) => {
                 let li = document.createElement("li");
                 li.innerHTML = `
@@ -323,7 +366,6 @@
 
             let csvContent = "data:text/csv;charset=utf-8,ISBN,Title,Author\n";
             scannedISBNS.forEach(function (book) {
-                // Escape quotes in title/author
                 const safeTitle = `"${(book.title || "").replace(/"/g, '""')}"`;
                 const safeAuthor = `"${(book.author || "").replace(/"/g, '""')}"`;
                 csvContent += `${book.isbn},${safeTitle},${safeAuthor}\n`;
@@ -347,70 +389,72 @@
 
         // --- Quagga Scanner Setup ---
 
-        Quagga.init({
-            inputStream: {
-                name: "Live",
-                type: "LiveStream",
-                target: document.querySelector('#reader'),
-                constraints: {
-                    width: { min: 640 },
-                    height: { min: 480 },
-                    facingMode: "environment", // Use back camera
-                    aspectRatio: { min: 1, max: 2 }
+        function initQuagga() {
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector('#reader'),
+                    constraints: {
+                        width: { min: 640 },
+                        height: { min: 480 },
+                        facingMode: "environment", // Use back camera
+                        aspectRatio: { min: 1, max: 2 }
+                    }
+                },
+                locator: {
+                    patchSize: "medium",
+                    halfSample: true
+                },
+                numOfWorkers: 2,
+                frequency: 10,
+                decoder: {
+                    readers: ["ean_reader"] // standard for books
+                },
+                locate: true // Find barcode location in image
+            }, function (err) {
+                if (err) {
+                    console.log(err);
+                    document.querySelector('#reader').innerHTML = `<p style="color:red; text-align:center; padding:20px;">Error starting camera: ${err}</p>`;
+                    return;
                 }
-            },
-            locator: {
-                patchSize: "medium",
-                halfSample: true
-            },
-            numOfWorkers: 2,
-            frequency: 10,
-            decoder: {
-                readers: ["ean_reader"] // standard for books
-            },
-            locate: true // Find barcode location in image
-        }, function (err) {
-            if (err) {
-                console.log(err);
-                document.querySelector('#reader').innerHTML = `<p style="color:red; text-align:center; padding:20px;">Error starting camera: ${err}</p>`;
-                return;
-            }
-            console.log("Initialization finished. Ready to start");
-            Quagga.start();
-        });
+                console.log("Initialization finished. Ready to start");
+                Quagga.start();
+            });
 
-        // Visual feedback: Draw boxes around detected barcodes
-        Quagga.onProcessed(function (result) {
-            var drawingCtx = Quagga.canvas.ctx.overlay,
-                drawingCanvas = Quagga.canvas.dom.overlay;
+            // Visual feedback
+            Quagga.onProcessed(function (result) {
+                var drawingCtx = Quagga.canvas.ctx.overlay,
+                    drawingCanvas = Quagga.canvas.dom.overlay;
 
-            if (result) {
-                if (result.boxes) {
-                    drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
-                    result.boxes.filter(function (box) {
-                        return box !== result.box;
-                    }).forEach(function (box) {
-                        Quagga.ImageDebug.drawPath(box, { x: 0, y: 1 }, drawingCtx, { color: "green", lineWidth: 2 });
-                    });
+                if (result) {
+                    if (result.boxes) {
+                        drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
+                        result.boxes.filter(function (box) {
+                            return box !== result.box;
+                        }).forEach(function (box) {
+                            Quagga.ImageDebug.drawPath(box, { x: 0, y: 1 }, drawingCtx, { color: "green", lineWidth: 2 });
+                        });
+                    }
+
+                    if (result.box) {
+                        Quagga.ImageDebug.drawPath(result.box, { x: 0, y: 1 }, drawingCtx, { color: "#00F", lineWidth: 2 });
+                    }
+
+                    if (result.codeResult && result.codeResult.code) {
+                        Quagga.ImageDebug.drawPath(result.line, { x: 'x', y: 'y' }, drawingCtx, { color: 'red', lineWidth: 3 });
+                    }
                 }
+            });
 
-                if (result.box) {
-                    Quagga.ImageDebug.drawPath(result.box, { x: 0, y: 1 }, drawingCtx, { color: "#00F", lineWidth: 2 });
+            // Successful detection
+            Quagga.onDetected(function (result) {
+                var code = result.codeResult.code;
+                if (code) {
+                    onScanSuccess(code);
                 }
-
-                if (result.codeResult && result.codeResult.code) {
-                    Quagga.ImageDebug.drawPath(result.line, { x: 'x', y: 'y' }, drawingCtx, { color: 'red', lineWidth: 3 });
-                }
-            }
-        });
-
-        // Successful detection
-        Quagga.onDetected(function (result) {
-            var code = result.codeResult.code;
-            if (code) {
-                onScanSuccess(code);
-            }
-        });
+            });
+        }
 
         // Cleanup when leaving page
         window.onbeforeunload = () => {
