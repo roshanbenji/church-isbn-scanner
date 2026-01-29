@@ -194,14 +194,31 @@
             }
         }
 
-        // Initialize Scanner
-        // format uses 'EAN_13' which is standard for Books
+        // Initialize Scanner with optimzations for Books (EAN-13)
+        // 1. Use Native Barcode Detector (faster on Android/Chrome)
+        // 2. Restrict to EAN_13 only (saves CPU)
+        // 3. Wider scanning box for barcodes
         let html5QrcodeScanner = new Html5QrcodeScanner(
             "reader",
-            { fps: 10, qrbox: { width: 250, height: 150 } },
+            {
+                fps: 15, // Higher stickiness
+                qrbox: { width: 280, height: 100 }, // Wider box for ISBNs
+                aspectRatio: 1.0,
+                formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13],
+                experimentalFeatures: {
+                    useBarCodeDetectorIfSupported: true
+                }
+            },
             /* verbose= */ false);
 
         html5QrcodeScanner.render(onScanSuccess);
+
+        // Fix camera failing on refresh by stopping scanner when page closes
+        window.onbeforeunload = () => {
+            html5QrcodeScanner.clear().catch(error => {
+                console.error("Failed to clear scanner", error);
+            });
+        };
     </script>
 
 </body>
