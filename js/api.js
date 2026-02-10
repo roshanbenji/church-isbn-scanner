@@ -1,29 +1,10 @@
-// js/api.js
-
 /**
- * Fetches book details from Open Library or Google Books.
+ * Fetches book details from Google Books or Open Library.
  * @param {string} isbn 
  * @returns {Promise<Object>} Book details {title, author, cover}
  */
 async function fetchBookDetails(isbn) {
-    // Try Open Library first
-    try {
-        const response = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&jscmd=data&format=json`);
-        const data = await response.json();
-        const key = `ISBN:${isbn}`;
-
-        if (data[key]) {
-            return {
-                title: data[key].title,
-                author: data[key].authors ? data[key].authors[0].name : "Unknown Author",
-                cover: data[key].cover ? data[key].cover.medium : null
-            };
-        }
-    } catch (e) {
-        console.warn("Open Library failed, trying fallback...", e);
-    }
-
-    // Fallback: Google Books
+    // Try Google Books first (Better coverage)
     try {
         const gResponse = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
         const gData = await gResponse.json();
@@ -37,7 +18,24 @@ async function fetchBookDetails(isbn) {
             };
         }
     } catch (e) {
-        console.warn("Google Books failed too", e);
+        console.warn("Google Books failed, trying fallback...", e);
+    }
+
+    // Fallback: Open Library
+    try {
+        const response = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&jscmd=data&format=json`);
+        const data = await response.json();
+        const key = `ISBN:${isbn}`;
+
+        if (data[key]) {
+            return {
+                title: data[key].title,
+                author: data[key].authors ? data[key].authors[0].name : "Unknown Author",
+                cover: data[key].cover ? data[key].cover.medium : null
+            };
+        }
+    } catch (e) {
+        console.warn("Open Library failed too", e);
     }
 
     return { title: "Unknown Book", author: "Details not found", cover: null };
