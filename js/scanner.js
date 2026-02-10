@@ -11,15 +11,21 @@ function initQuagga(onDetectedCallback) {
             type: "LiveStream",
             target: document.querySelector('#reader'),
             constraints: {
-                width: { min: 640 },
-                height: { min: 480 },
+                width: { min: 1280 },
+                height: { min: 720 },
                 facingMode: "environment", // Use back camera
                 aspectRatio: { min: 1, max: 2 }
+            },
+            area: { // defines rectangle of the detection/localization area
+                top: "25%",    // top offset
+                right: "10%",  // right offset
+                bottom: "25%", // bottom offset
+                left: "10%"    // left offset
             }
         },
         locator: {
             patchSize: "medium",
-            halfSample: true
+            halfSample: false // Force full resolution for better accuracy
         },
         numOfWorkers: 2,
         frequency: 10,
